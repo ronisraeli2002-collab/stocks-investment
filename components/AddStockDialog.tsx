@@ -1,4 +1,4 @@
-"use client"; // רכיב שדורש אינטראקציה בדפדפן
+"use client";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,11 +11,29 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { addStock } from "@/app/actions"; // מייבאים את הפעולה שיצרנו
+import { addStock } from "@/app/actions";
 import { useState } from "react";
+import { toast } from "sonner"; // הייבוא של ההודעות
 
 export function AddStockDialog() {
   const [open, setOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // כדי למנוע לחיצות כפולות
+
+  const handleSubmit = async (formData: FormData) => {
+    setIsLoading(true);
+    
+    // קריאה לשרת
+    const result = await addStock(formData);
+    
+    setIsLoading(false);
+
+    if (result.success) {
+      toast.success(result.message); // הודעה ירוקה
+      setOpen(false); // סוגר את החלון רק אם הצליח
+    } else {
+      toast.error(result.message); // הודעה אדומה
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -29,18 +47,11 @@ export function AddStockDialog() {
         <DialogHeader>
           <DialogTitle>הוספת מניה לתיק</DialogTitle>
           <DialogDescription className="text-slate-400">
-            הכנס את הסימול של המניה (למשל TSLA) ואת השם שלה.
+            הכנס את הסימול (למשל TSLA). השם יזוהה אוטומטית.
           </DialogDescription>
         </DialogHeader>
 
-        {/* הטופס שמפעיל את ה-Server Action */}
-        <form 
-          action={async (formData) => {
-            await addStock(formData); // קריאה לשרת
-            setOpen(false); // סגירת החלון אחרי השמירה
-          }} 
-          className="grid gap-4 py-4"
-        >
+        <form action={handleSubmit} className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="symbol" className="text-right">
               סימול
@@ -48,27 +59,23 @@ export function AddStockDialog() {
             <Input
               id="symbol"
               name="symbol"
-              placeholder="TSLA"
-              className="col-span-3 bg-slate-800 border-slate-700 text-white"
+              placeholder="AAPL / TSLA / NVDA"
+              className="col-span-3 bg-slate-800 border-slate-700 text-white uppercase"
               required
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="name" className="text-right">
-              שם חברה
-            </Label>
-            <Input
-              id="name"
-              name="name"
-              placeholder="Tesla Inc."
-              className="col-span-3 bg-slate-800 border-slate-700 text-white"
-              required
+              autoFocus // שמים את הסמן ישר בתיבה
+              disabled={isLoading}
             />
           </div>
           
+          {/* מחקנו את שדה ה-NAME כבקשתך */}
+          
           <div className="flex justify-end mt-4">
-            <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700">
-              שמור מניה
+            <Button 
+              type="submit" 
+              className="bg-emerald-600 hover:bg-emerald-700 w-full"
+              disabled={isLoading}
+            >
+              {isLoading ? "בודק..." : "שמור מניה"}
             </Button>
           </div>
         </form>
