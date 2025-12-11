@@ -19,6 +19,7 @@ model Stock {
   id        Int      @id @default(autoincrement())
   symbol    String
   name      String
+  quantity  Int      @default(1)
   addedAt   DateTime @default(now())
   userId    Int
   user      User     @relation(fields: [userId], references: [id])

@@ -45,7 +45,7 @@ export default async function Home() {
       {/* סטטוס מערכת */}
       <div className="border border-green-900/50 bg-green-900/10 p-4 rounded-lg text-center backdrop-blur-sm w-full max-w-md">
         <p className="text-sm text-green-400 font-mono flex items-center justify-center gap-2">
-            ⚡ Real-Time Updates (10s)
+                Real-Time Updates (30s)
         </p>
         <p className="text-slate-300 font-bold mt-1">
            מניות במעקב: {currentUser?.stocks.length || 0}
@@ -66,6 +66,7 @@ export default async function Home() {
                 id={stock.id}
                 symbol={stock.symbol}
                 name={stock.name}
+                quantity={stock.quantity}
                 addedAt={stock.addedAt}
                 initialPrice={stock.price}
                 initialChange={stock.change}

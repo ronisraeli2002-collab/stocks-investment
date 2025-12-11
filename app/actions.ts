@@ -4,45 +4,43 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getStockData, getStockHistory } from "@/lib/finance"; 
 
-// --- פונקציה 1: הוספת מניה (עם בדיקות והודעות) ---
+// --- פונקציה 1: הוספת מניה מעודכנת ---
 export async function addStock(formData: FormData) {
   const symbol = (formData.get("symbol") as string)?.toUpperCase().trim();
+  // קליטת הכמות מהטופס (אם לא הכניסו כלום, נניח שזה 1)
+  const quantity = parseInt(formData.get("quantity") as string) || 1;
 
   if (!symbol) return { success: false, message: "נא להזין סימול מניה" };
+  if (quantity < 1) return { success: false, message: "כמות חייבת להיות לפחות 1" };
 
   const user = await db.user.findFirst();
   if (!user) return { success: false, message: "משתמש לא נמצא" };
 
-  // בדיקת כפילות
   const existingStock = await db.stock.findFirst({
-    where: {
-      userId: user.id,
-      symbol: symbol,
-    },
+    where: { userId: user.id, symbol: symbol },
   });
 
   if (existingStock) {
     return { success: false, message: `⚠️ המניה ${symbol} כבר קיימת בתיק שלך!` };
   }
 
-  // בדיקת תקינות מול יאהו
   const liveData = await getStockData(symbol);
   
   if (liveData.price === 0) {
     return { success: false, message: `❌ המניה ${symbol} לא נמצאה בבורסה` };
   }
 
-  // שמירה
   await db.stock.create({
     data: {
       symbol: symbol,
       name: liveData.name,
+      quantity: quantity, // שומרים את הכמות החדשה!
       userId: user.id,
     },
   });
 
   revalidatePath("/");
-  return { success: true, message: `✅ המניה ${symbol} נוספה בהצלחה!` };
+  return { success: true, message: `✅ נוספו ${quantity} מניות של ${symbol}!` };
 }
 
 // --- פונקציה 2: קבלת מחיר עדכני ---

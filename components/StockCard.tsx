@@ -11,12 +11,13 @@ interface StockProps {
   id: number;
   symbol: string;
   name: string;
+  quantity: number;
   addedAt: Date;
   initialPrice: number;
   initialChange: number;
 }
 
-export function StockCard({ id, symbol, name, addedAt, initialPrice, initialChange }: StockProps) {
+export function StockCard({ id, symbol, name, quantity, addedAt, initialPrice, initialChange }: StockProps) {
   const [price, setPrice] = useState(initialPrice);
   const [change, setChange] = useState(initialChange);
   const [history, setHistory] = useState<any[]>([]);
@@ -34,6 +35,7 @@ export function StockCard({ id, symbol, name, addedAt, initialPrice, initialChan
 
     fetchData();
 
+    // עדכון כל 30 שניות
     const interval = setInterval(async () => {
       setIsLoading(true);
       try {
@@ -45,18 +47,16 @@ export function StockCard({ id, symbol, name, addedAt, initialPrice, initialChan
       } finally {
         setIsLoading(false);
       }
-    }, 10000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [symbol]);
 
-  // חישובים לוגיים
   const isPositive = change >= 0;
   const colorClass = isPositive ? "text-emerald-400" : "text-red-400";
   const chartColor = isPositive ? "#34d399" : "#f87171";
   const arrow = isPositive ? "▲" : "▼";
 
-  // חישוב תשואה ל-6 חודשים
   let sixMonthChange = 0;
   let isSixMonthPositive = true;
 
@@ -95,16 +95,34 @@ export function StockCard({ id, symbol, name, addedAt, initialPrice, initialChan
       </CardHeader>
       
       <CardContent className="pl-12">
-        <div className={`text-2xl font-bold transition-colors duration-300 ${isLoading ? "text-slate-400" : "text-white"}`}>
-            ${price.toFixed(2)}
+        <div className="flex justify-between items-end mb-2">
+            <div>
+                <div className={`text-2xl font-bold transition-colors duration-300 ${isLoading ? "text-slate-400" : "text-white"}`}>
+                    ${price.toFixed(2)}
+                </div>
+                <div className="text-xs text-slate-400">
+                    מחיר יחידה
+                </div>
+            </div>
+
+            <div className="text-right">
+                <div className="text-xl font-bold text-emerald-300">
+                    ${(price * quantity).toLocaleString()}
+                </div>
+                <div className="text-xs text-slate-400">
+                    שווי אחזקות ({quantity})
+                </div>
+            </div>
         </div>
-        <p className="text-xs text-slate-500 truncate">{name}</p>
         
-        {/* אזור הגרף + הנתון החדש */}
+        <p className="text-xs text-slate-500 truncate mb-4">{name}</p>
+        
+        {/* אזור הגרף */}
         <div className="mt-4">
             {history.length > 0 && (
                 <div className="flex justify-end mb-1">
-                    <span className={`text-[10px] font-mono font-bold ${isSixMonthPositive ? 'text-emerald-400' : 'text-red-400'} bg-slate-800/50 px-1.5 py-0.5 rounded`}>
+                    {/* כאן שינינו את הגודל ל-text-xs */}
+                    <span className={`text-xs font-mono font-bold ${isSixMonthPositive ? 'text-emerald-400' : 'text-red-400'} bg-slate-800/50 px-2 py-1 rounded`}>
                         6M: {isSixMonthPositive ? "+" : ""}{sixMonthChange.toFixed(2)}%
                     </span>
                 </div>
