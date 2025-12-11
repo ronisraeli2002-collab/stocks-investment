@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEffect, useState } from "react";
-import { getLatestPrice, removeStock, getHistory } from "@/app/actions";
+import { removeStock, getHistory } from "@/app/actions"; // מחקנו את getLatestPrice
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { StockChart } from "@/components/StockChart";
@@ -13,43 +13,23 @@ interface StockProps {
   name: string;
   quantity: number;
   addedAt: Date;
-  initialPrice: number;
-  initialChange: number;
+  // אלו הנתונים החיים שיגיעו עכשיו מהאבא
+  price: number;
+  change: number;
 }
 
-export function StockCard({ id, symbol, name, quantity, addedAt, initialPrice, initialChange }: StockProps) {
-  const [price, setPrice] = useState(initialPrice);
-  const [change, setChange] = useState(initialChange);
+export function StockCard({ id, symbol, name, quantity, addedAt, price, change }: StockProps) {
+  // מחקנו את ה-State של המחיר, כי הוא מגיע עכשיו כ-prop (נתון מלמעלה)
   const [history, setHistory] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
+  
+  // נשאיר רק את טעינת ההיסטוריה (זה קורה רק פעם אחת בטעינה)
   useEffect(() => {
-    const fetchData = async () => {
-      const newData = await getLatestPrice(symbol);
-      setPrice(newData.price);
-      setChange(newData.change);
-
+    const loadHistory = async () => {
       const historyData = await getHistory(symbol);
       setHistory(historyData);
     };
-
-    fetchData();
-
-    // עדכון כל 30 שניות
-    const interval = setInterval(async () => {
-      setIsLoading(true);
-      try {
-        const newData = await getLatestPrice(symbol);
-        setPrice(newData.price);
-        setChange(newData.change);
-      } catch (error) {
-        console.error("Failed to update stock:", symbol);
-      } finally {
-        setIsLoading(false);
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
+    loadHistory();
+    // אין כאן יותר setInterval!
   }, [symbol]);
 
   const isPositive = change >= 0;
@@ -67,7 +47,7 @@ export function StockCard({ id, symbol, name, quantity, addedAt, initialPrice, i
   }
 
   return (
-    <Card className={`relative group bg-slate-900 border-slate-800 text-slate-100 transition-all duration-500 ${isLoading ? "border-blue-500/50" : ""}`}>
+    <Card className="relative group bg-slate-900 border-slate-800 text-slate-100 transition-all duration-500 hover:border-blue-500/50">
       
       <button
         onClick={async (e) => {
@@ -97,40 +77,32 @@ export function StockCard({ id, symbol, name, quantity, addedAt, initialPrice, i
       <CardContent className="pl-12">
         <div className="flex justify-between items-end mb-2">
             <div>
-                <div className={`text-2xl font-bold transition-colors duration-300 ${isLoading ? "text-slate-400" : "text-white"}`}>
+                <div className="text-2xl font-bold text-white transition-colors duration-300">
                     ${price.toFixed(2)}
                 </div>
-                <div className="text-xs text-slate-400">
-                    מחיר יחידה
-                </div>
+                <div className="text-xs text-slate-400">מחיר יחידה</div>
             </div>
 
             <div className="text-right">
                 <div className="text-xl font-bold text-emerald-300">
                     ${(price * quantity).toLocaleString()}
                 </div>
-                <div className="text-xs text-slate-400">
-                    שווי אחזקות ({quantity})
-                </div>
+                <div className="text-xs text-slate-400">שווי אחזקות ({quantity})</div>
             </div>
         </div>
         
         <p className="text-xs text-slate-500 truncate mb-4">{name}</p>
         
-        {/* אזור הגרף */}
         <div className="mt-4">
             {history.length > 0 && (
                 <div className="flex justify-end mb-1">
-                    {/* כאן שינינו את הגודל ל-text-xs */}
                     <span className={`text-xs font-mono font-bold ${isSixMonthPositive ? 'text-emerald-400' : 'text-red-400'} bg-slate-800/50 px-2 py-1 rounded`}>
                         6M: {isSixMonthPositive ? "+" : ""}{sixMonthChange.toFixed(2)}%
                     </span>
                 </div>
             )}
-            
             <StockChart data={history} color={chartColor} />
         </div>
-        
       </CardContent>
     </Card>
   );

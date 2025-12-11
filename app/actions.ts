@@ -2,12 +2,12 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { getStockData, getStockHistory } from "@/lib/finance"; 
+// שים לב: אנחנו מייבאים עכשיו גם את getBatchStockData
+import { getStockData, getStockHistory, getBatchStockData } from "@/lib/finance";
 
-// --- פונקציה 1: הוספת מניה מעודכנת ---
+// --- פונקציה 1: הוספת מניה (עם בדיקות, כמות והודעות) ---
 export async function addStock(formData: FormData) {
   const symbol = (formData.get("symbol") as string)?.toUpperCase().trim();
-  // קליטת הכמות מהטופס (אם לא הכניסו כלום, נניח שזה 1)
   const quantity = parseInt(formData.get("quantity") as string) || 1;
 
   if (!symbol) return { success: false, message: "נא להזין סימול מניה" };
@@ -16,25 +16,31 @@ export async function addStock(formData: FormData) {
   const user = await db.user.findFirst();
   if (!user) return { success: false, message: "משתמש לא נמצא" };
 
+  // בדיקת כפילות
   const existingStock = await db.stock.findFirst({
-    where: { userId: user.id, symbol: symbol },
+    where: {
+      userId: user.id,
+      symbol: symbol,
+    },
   });
 
   if (existingStock) {
     return { success: false, message: `⚠️ המניה ${symbol} כבר קיימת בתיק שלך!` };
   }
 
+  // בדיקת תקינות מול יאהו
   const liveData = await getStockData(symbol);
   
   if (liveData.price === 0) {
     return { success: false, message: `❌ המניה ${symbol} לא נמצאה בבורסה` };
   }
 
+  // שמירה
   await db.stock.create({
     data: {
       symbol: symbol,
       name: liveData.name,
-      quantity: quantity, // שומרים את הכמות החדשה!
+      quantity: quantity,
       userId: user.id,
     },
   });
@@ -43,7 +49,7 @@ export async function addStock(formData: FormData) {
   return { success: true, message: `✅ נוספו ${quantity} מניות של ${symbol}!` };
 }
 
-// --- פונקציה 2: קבלת מחיר עדכני ---
+// --- פונקציה 2: קבלת מחיר עדכני (בודד) ---
 export async function getLatestPrice(symbol: string) {
   return await getStockData(symbol);
 }
@@ -59,7 +65,36 @@ export async function removeStock(id: number) {
   }
 }
 
-// --- פונקציה 4 (החדשה!): קבלת היסטוריה לגרף ---
+// --- פונקציה 4: קבלת היסטוריה לגרף ---
 export async function getHistory(symbol: string) {
   return await getStockHistory(symbol);
+}
+
+// --- פונקציה 5: קבלת תמונת מצב לכל התיק (Optimized Batch Request) ---
+export async function getPortfolioSnapshot() {
+  const user = await db.user.findFirst({
+    include: { stocks: true }
+  });
+
+  if (!user || user.stocks.length === 0) return [];
+
+  // 1. אוספים את כל הסימולים לרשימה אחת
+  const symbols = user.stocks.map(stock => stock.symbol);
+
+  // 2. שולחים בקשה אחת מרוכזת ליאהו (הרבה יותר מהיר!)
+  const marketData = await getBatchStockData(symbols);
+
+  // 3. מחברים את המידע
+  const snapshot = user.stocks.map(stock => {
+    const data = marketData.find(m => m.symbol === stock.symbol) || { price: 0, change: 0 };
+    
+    return {
+      symbol: stock.symbol,
+      price: data.price,
+      change: data.change,
+      quantity: stock.quantity
+    };
+  });
+
+  return snapshot;
 }
