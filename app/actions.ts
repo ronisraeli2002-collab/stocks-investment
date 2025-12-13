@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 // שים לב: אנחנו מייבאים עכשיו גם את getBatchStockData
 import { getStockData, getStockHistory, getBatchStockData } from "@/lib/finance";
+import { analyzeStockWithPython } from "@/lib/ai";
 
 // --- פונקציה 1: הוספת מניה (עם בדיקות, כמות והודעות) ---
 export async function addStock(formData: FormData) {
@@ -97,4 +98,9 @@ export async function getPortfolioSnapshot() {
   });
 
   return snapshot;
+}
+
+// --- פונקציה 6: הפעלת הניתוח החכם ---
+export async function getAiAnalysis(symbol: string) {
+  return await analyzeStockWithPython(symbol);
 }
