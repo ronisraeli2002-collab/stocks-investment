@@ -1,11 +1,13 @@
-import { Button } from "@/components/ui/button";
 import { db } from "@/lib/db";
-import { AddStockDialog } from "@/components/AddStockDialog";
-import { getPortfolioSnapshot } from "@/app/actions"; // הפונקציה היעילה (Batch)
-import { LiveDashboard } from "@/components/LiveDashboard"; // המנהל החדש
+import { getPortfolioSnapshot } from "@/app/actions";
+import { LiveDashboard } from "@/components/LiveDashboard";
+
+// זה מבטיח שהדף תמיד יביא נתונים עדכניים ולא ישמור cache ישן
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  // --- לוגיקת משתמש (נשאר בדיוק אותו דבר) ---
+  // --- לוגיקה קריטית: יצירת משתמש ראשוני אם לא קיים ---
+  // (זה נשאר כדי שהפרויקט יעבוד גם על דאטה-בייס נקי)
   const users = await db.user.findMany({ include: { stocks: true } });
 
   if (users.length === 0) {
@@ -18,16 +20,15 @@ export default async function Home() {
     });
   }
 
-  // --- הבאת נתונים ---
-  // במקום לחשב ידנית כאן, אנחנו קוראים לפונקציה שמביאה את הכל מוכן
+  // --- הבאת הנתונים הראשוניים לדשבורד ---
   const initialData = await getPortfolioSnapshot();
 
   return (
-    <div className="flex min-h-screen flex-col items-center gap-8 bg-slate-950 text-white p-8">
+    <main className="min-h-screen bg-slate-950 text-white p-4 md:p-8" dir="rtl">
       
-      {/* כותרת ראשית (לא נגענו) */}
-      <div className="text-center mt-8 space-y-2">
-        <h1 className="text-5xl font-extrabold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+      {/* כותרת ראשית */}
+      <div className="max-w-6xl mx-auto mb-10 flex flex-col items-center text-center mt-8 space-y-2">
+        <h1 className="text-4xl md:text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
             Smart FinDash 🚀
         </h1>
         <p className="text-slate-400 text-lg">
@@ -35,19 +36,9 @@ export default async function Home() {
         </p>
       </div>
 
-      {/* --- השינוי הגדול: המנהל החכם --- */}
-      {/* הרכיב הזה מכיל בתוכו את הסיכום, את הסטטוס ואת רשימת המניות */}
-      {/* הוא זה שידאג לרענן את הכל בבקשה אחת כל 30 שניות */}
+      {/* הדשבורד שמכיל הכל (סיכום, הוספה, רשימה) */}
       <LiveDashboard initialData={initialData} />
       
-      {/* כפתורים תחתונים (לא נגענו) */}
-      <div className="flex gap-4 mt-4 mb-12">
-        <AddStockDialog />
-        <Button variant="outline" className="text-black bg-white hover:bg-slate-200 border-none text-lg px-8 py-6">
-          תיעוד API
-        </Button>
-      </div>
-
-    </div>
+    </main>
   );
 }

@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEffect, useState } from "react";
-import { removeStock, getHistory, getAiAnalysis } from "@/app/actions";
+import { getHistory, getAiAnalysis } from "@/app/actions"; // מחקנו את removeStock מכאן כי הוא לא בשימוש ישיר
 import { Trash2, Brain, Loader2, TrendingUp, TrendingDown, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { StockChart } from "@/components/StockChart";
@@ -12,12 +12,12 @@ interface StockProps {
   symbol: string;
   name: string;
   quantity: number;
-  addedAt: Date;
   price: number;
   change: number;
+  onDelete?: () => void; // הפונקציה שמגיעה מהדשבורד
 }
 
-export function StockCard({ id, symbol, name, quantity, addedAt, price, change }: StockProps) {
+export function StockCard({ id, symbol, name, quantity, price, change, onDelete }: StockProps) {
   const [history, setHistory] = useState<any[]>([]);
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -56,15 +56,6 @@ export function StockCard({ id, symbol, name, quantity, addedAt, price, change }
   const chartColor = isPositive ? "#34d399" : "#f87171";
   const arrow = isPositive ? "▲" : "▼";
 
-  let sixMonthChange = 0;
-  let isSixMonthPositive = true;
-
-  if (history.length > 0) {
-      const startPrice = history[0].price;
-      sixMonthChange = ((price - startPrice) / startPrice) * 100;
-      isSixMonthPositive = sixMonthChange >= 0;
-  }
-
   return (
     <div className="relative h-[320px] w-full perspective-1000 group">
       
@@ -73,19 +64,18 @@ export function StockCard({ id, symbol, name, quantity, addedAt, price, change }
       >
         
         {/* --- צד קדמי (FRONT) --- */}
-        {/* הוספנו pointer-events-none כשהוא הפוך כדי שלא יחסום לחיצות */}
         <Card className={`absolute inset-0 backface-hidden bg-slate-900 border-slate-800 text-slate-100 flex flex-col justify-between hover:border-blue-500/50 transition-colors ${isFlipped ? "pointer-events-none" : "pointer-events-auto"}`}>
             
-            {/* כפתור מחיקה */}
+            {/* --- התיקון הגדול כאן: כפתור מחיקה --- */}
             <button
-                onClick={async (e) => {
-                e.stopPropagation();
-                if(confirm("למחוק את המניה מהרשימה?")) {
-                    const result = await removeStock(id);
-                    if (result?.success) toast.success("המניה נמחקה בהצלחה");
-                }
+                onClick={(e) => {
+                    e.stopPropagation(); // כדי שהכרטיס לא יתהפך כשלוחצים על הפח
+                    if (onDelete) {
+                        onDelete(); // מפעיל את הפונקציה של הדשבורד שמבצעת את המחיקה האמיתית
+                    }
                 }}
                 className="absolute top-3 left-3 z-10 text-slate-400 hover:text-red-500 hover:bg-slate-800 rounded-full p-2 transition-all opacity-0 group-hover:opacity-100"
+                title="מחק מניה"
             >
                 <Trash2 size={16} />
             </button>
@@ -133,11 +123,9 @@ export function StockCard({ id, symbol, name, quantity, addedAt, price, change }
 
 
         {/* --- צד אחורי (BACK - AI) --- */}
-        {/* הוספנו pointer-events-auto כשהוא הפוך כדי שכן יקבל לחיצות */}
         <Card 
             className={`absolute inset-0 h-full w-full backface-hidden rotate-y-180 bg-gradient-to-br from-slate-900 to-purple-950 border-purple-500/50 text-slate-100 flex flex-col cursor-default ${isFlipped ? "pointer-events-auto" : "pointer-events-none"}`}
         >
-            {/* כפתור חזור (חץ שמאלה) */}
             <button 
                 onClick={(e) => {
                     e.stopPropagation();

@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  # 1. שירות הפייתון (המוח)
+  python-api:
+    build: ./python-service  # בונה מהתיקייה הזו
+    ports:
+      - "8000:8000"          # חושף את הפורט החוצה
+    volumes:
+      - ./python-service:/app # טריק: מאפשר לך לערוך קוד במחשב והוא מתעדכן בדוקר מיד!
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - redis                # מחכה שרדיס יעלה לפני שהוא עולה
+
+  # 2. שירות הרדיס (הזיכרון)
+  redis:
+    image: redis:alpine      # מוריד גרסה קלילה ורשמית של רדיס
+    ports:
+      - "6379:6379"          # הפורט הסטנדרטי של רדיס
