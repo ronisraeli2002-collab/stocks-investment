@@ -17,3 +17,7 @@ services:
     image: redis:alpine      # מוריד גרסה קלילה ורשמית של רדיס
     ports:
       - "6379:6379"          # הפורט הסטנדרטי של רדיס
+    volumes:
+      - redis_data:/data # שומר את המידע גם אם מכבים את הדוקר
+volumes:
+  redis_data:

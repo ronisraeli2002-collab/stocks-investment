@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PieChart, Pie, Cell, ResponsiveContainer, Sector } from "recharts";
 
@@ -40,6 +40,12 @@ const renderActiveShape = (props: any) => {
 
 export function PortfolioDistribution({ stocks }: Props) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [mounted, setMounted] = useState(false); // <-- הוספנו: משתנה לבדיקת טעינה
+
+  // <-- הוספנו: אפקט שרץ רק בצד לקוח כדי למנוע את השגיאה של Recharts
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // חישוב ומיון הנתונים
   const data = stocks.map((stock) => ({
@@ -56,10 +62,13 @@ export function PortfolioDistribution({ stocks }: Props) {
   const displayLabel = activeItem ? "שווי אחזקה" : "שווי תיק";
   const displayColor = activeItem && activeIndex !== null ? COLORS[activeIndex % COLORS.length] : "white";
 
-  if (stocks.length === 0) {
+  // <-- תיקון: אם הרכיב לא נטען עדיין (mounted) או שאין מניות, לא מציירים גרף
+  if (!mounted || stocks.length === 0) {
     return (
         <Card className="bg-slate-900 border-slate-800 text-slate-100 h-full flex items-center justify-center shadow-lg min-h-[250px]">
-            <span className="text-slate-500">אין נתונים להצגה</span>
+            <span className="text-slate-500">
+                {!mounted ? "" : "אין נתונים להצגה"}
+            </span>
         </Card>
     );
   }
@@ -71,10 +80,13 @@ export function PortfolioDistribution({ stocks }: Props) {
           פיזור תיק
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 min-h-0 relative">
+      
+      {/* הוספתי p-0 כדי למנוע רווחים מיותרים שדוחפים את הגרף */}
+      <CardContent className="flex-1 min-h-0 relative p-0">
         <div className="absolute inset-0 flex items-center justify-center">
             
-          <ResponsiveContainer width="100%" height="100%">
+          {/* הוספתי minHeight ליתר ביטחון */}
+          <ResponsiveContainer width="100%" height="100%" minHeight={200}>
             <PieChart>
               <Pie
                 data={data}
@@ -109,7 +121,7 @@ export function PortfolioDistribution({ stocks }: Props) {
             
             {/* שם המניה (מופיע רק בריחוף) */}
             <span 
-                className="text-xl font-bold tracking-tight mb-1 h-7" // גובה קבוע למניעת קפיצות
+                className="text-xl font-bold tracking-tight mb-1 h-7"
                 style={{ color: displayColor === "white" ? "white" : displayColor }}
             >
                 {activeItem ? activeItem.name : ""}
