@@ -1,11 +1,4 @@
-// lib/redis.ts
-import Redis from "ioredis";
+import { Redis } from '@upstash/redis';
 
-const getRedisUrl = () => {
-  if (process.env.REDIS_URL) {
-    return process.env.REDIS_URL;
-  }
-  throw new Error("REDIS_URL is not defined");
-};
-
-export const redis = new Redis(getRedisUrl());
+// Upstash יודע למשוך את ה-URL וה-TOKEN אוטומטית מקובץ ה-.env
+export const redis = Redis.fromEnv();

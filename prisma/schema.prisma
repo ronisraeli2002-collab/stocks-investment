@@ -7,20 +7,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  stocks    Stock[]
-}
+// מחקנו את model User - קלארק מנהל את המשתמשים
+// אנחנו רק שומרים את ה-ID שלהם בטבלת המניות
 
 model Stock {
   id        Int      @id @default(autoincrement())
   symbol    String
-  name      String
+  name      String?  // הפכתי לאופציונלי למקרה שאין שם
   quantity  Int      @default(1)
   addedAt   DateTime @default(now())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
+  
+  userId    String   // <--- שינוי קריטי: ID של Clerk הוא מחרוזת (למשל user_2xyz...)
+  
+  @@index([userId]) // אינדקס לשליפות מהירות לפי משתמש
 }

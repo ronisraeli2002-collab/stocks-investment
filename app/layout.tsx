@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google"; // הפונטים החדשים שלך
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/sonner"; // 1. חובה לייבא את זה
+import { Toaster } from "@/components/ui/sonner";
+import { ClerkProvider } from '@clerk/nextjs'; // הייבוא שכבר קיים אצלך
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,14 +25,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // 2. הוספנו את className="dark" כדי שהרקע יהיה שחור
-    <html lang="en" className="dark">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-        <Toaster /> {/* 3. זה הרכיב שמציג את ההודעות הקופצות */}
-      </body>
-    </html>
+    // 1. העטיפה הגדולה של Clerk שחייבת להיות הכי בחוץ
+    <ClerkProvider>
+      {/* הוספתי dir="rtl" ו-lang="he" כדי שהעיצוב יסתדר בעברית */}
+      <html lang="he" dir="rtl" className="dark">
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        >
+          {children}
+          <Toaster /> {/* ההודעות הקופצות */}
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

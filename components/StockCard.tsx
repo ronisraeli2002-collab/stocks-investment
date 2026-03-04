@@ -2,10 +2,11 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEffect, useState } from "react";
-import { getHistory, getAiAnalysis } from "@/app/actions"; // מחקנו את removeStock מכאן כי הוא לא בשימוש ישיר
-import { Trash2, Brain, Loader2, TrendingUp, TrendingDown, ArrowLeft } from "lucide-react";
+import { getHistory, getAiAnalysis } from "@/app/actions";
+import { Trash2, Brain, Loader2, TrendingUp, TrendingDown, ArrowLeft, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { StockChart } from "@/components/StockChart";
+import Link from "next/link"; // <--- חשוב! הוספנו את זה
 
 interface StockProps {
   id: number;
@@ -14,7 +15,7 @@ interface StockProps {
   quantity: number;
   price: number;
   change: number;
-  onDelete?: () => void; // הפונקציה שמגיעה מהדשבורד
+  onDelete?: () => void;
 }
 
 export function StockCard({ id, symbol, name, quantity, price, change, onDelete }: StockProps) {
@@ -66,13 +67,11 @@ export function StockCard({ id, symbol, name, quantity, price, change, onDelete 
         {/* --- צד קדמי (FRONT) --- */}
         <Card className={`absolute inset-0 backface-hidden bg-slate-900 border-slate-800 text-slate-100 flex flex-col justify-between hover:border-blue-500/50 transition-colors ${isFlipped ? "pointer-events-none" : "pointer-events-auto"}`}>
             
-            {/* --- התיקון הגדול כאן: כפתור מחיקה --- */}
+            {/* כפתור מחיקה */}
             <button
                 onClick={(e) => {
-                    e.stopPropagation(); // כדי שהכרטיס לא יתהפך כשלוחצים על הפח
-                    if (onDelete) {
-                        onDelete(); // מפעיל את הפונקציה של הדשבורד שמבצעת את המחיקה האמיתית
-                    }
+                    e.stopPropagation();
+                    if (onDelete) onDelete();
                 }}
                 className="absolute top-3 left-3 z-10 text-slate-400 hover:text-red-500 hover:bg-slate-800 rounded-full p-2 transition-all opacity-0 group-hover:opacity-100"
                 title="מחק מניה"
@@ -93,7 +92,12 @@ export function StockCard({ id, symbol, name, quantity, price, change, onDelete 
             </button>
 
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pl-12 pr-12">
-                <CardTitle className="text-xl font-bold">{symbol}</CardTitle>
+                {/* --- השינוי כאן: שם המניה הוא כפתור קישור --- */}
+                <Link href={`/stock/${symbol}`} className="hover:text-blue-400 transition flex items-center gap-2 group/link">
+                    <CardTitle className="text-xl font-bold cursor-pointer">{symbol}</CardTitle>
+                    <ExternalLink size={14} className="opacity-0 group-hover/link:opacity-100 transition-opacity" />
+                </Link>
+
                 <span className={`font-mono text-sm ${colorClass} flex items-center gap-1`}>
                 {arrow} {change.toFixed(2)}%
                 </span>

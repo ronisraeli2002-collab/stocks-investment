@@ -53,7 +53,7 @@ export function LiveDashboard({ initialData }: DashboardProps) {
     const changeValue = stocks.reduce((acc, s) => {
       const startPrice = s.price / (1 + s.change / 100);
       return acc + s.price * s.quantity - startPrice * s.quantity;
-    }, 0);
+        }, 0);
     return { totalValue: value, totalChangeValue: changeValue, isPositive: changeValue >= 0 };
   }, [stocks]);
 
@@ -90,7 +90,8 @@ export function LiveDashboard({ initialData }: DashboardProps) {
         <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
            <Wallet className="text-blue-500" size={24}/> התיק שלי
         </h1>
-        <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-900/50 px-3 py-1 rounded-full border border-slate-800">
+        {/* התיקון כאן: הוספתי suppressHydrationWarning לדיב הזה */}
+        <div suppressHydrationWarning className="flex items-center gap-2 text-xs text-slate-500 bg-slate-900/50 px-3 py-1 rounded-full border border-slate-800">
             <Activity size={12} className="text-emerald-500 animate-pulse" />
             עודכן: {lastUpdated.toLocaleTimeString()}
         </div>
