@@ -1,16 +1,27 @@
 "use client";
 
-import { useState } from "react";
-// שים לב: אנחנו מייבאים את הפונקציה מהקובץ החדש שיצרת
+import { useState, useRef, useEffect } from "react";
 import { askStockAgent } from "@/app/agent"; 
 import { Send, Bot, Sparkles, Loader2 } from "lucide-react";
-import { Input } from "@/components/ui/input"; // אם אין לך רכיב כזה, תגיד לי ונחליף ב-input רגיל
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+}
 
 export function StockAgentChat({ symbol }: { symbol: string }) {
   const [query, setQuery] = useState("");
-  const [response, setResponse] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
   // הצעות לשאלות כדי שלמשתמש יהיה קל להתחיל
   const suggestions = [
@@ -21,42 +32,62 @@ export function StockAgentChat({ symbol }: { symbol: string }) {
   ];
 
 const handleAsk = async (textToAsk: string) => {
-    if (!textToAsk) return;
+    if (!textToAsk.trim()) return;
     
+    // Add user message immediately
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content: textToAsk
+    };
+    
+    setQuery("");
+    setMessages(prev => [...prev, userMessage]);
     setLoading(true);
-    setResponse(""); 
-    setQuery(textToAsk);
 
     try {
-      // הקריאה לשרת
-      const result = await askStockAgent(symbol, textToAsk);
+      // Convert messages to the format expected by agent
+      const history = messages.map(msg => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.content
+      }));
+
+      // Call agent with full conversation history
+      const result = await askStockAgent(symbol, textToAsk, history);
       
-      // חשיפת נתונים: מדפיסים לקונסול של הדפדפן את האובייקט הגולמי שחזר מהשרת
       console.log("📦 Raw response from Agent:", result);
 
-      if (result && result.success) {
-        // המודל סיים בהצלחה, אבל צריך לבדוק אם הוא באמת ענה
-        if (!result.text || result.text.trim() === "") {
-          setResponse("⚠️ המודל סיים לסרוק אך לא ניסח תשובה. נסה למקד את השאלה.");
-        } else {
-          setResponse(result.text);
-        }
+      if (result && result.success && result.text?.trim()) {
+        const assistantMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: result.text
+        };
+        setMessages(prev => [...prev, assistantMessage]);
       } else {
-        // השרת החזיר שגיאה מבוקרת - נציג אותה במקום טקסט גנרי
-        setResponse(result?.text || "❌ שגיאה בשרת ה-AI.");
+        const errorMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: result?.text || "❌ שגיאה בשרת ה-AI. אנא נסה שוב."
+        };
+        setMessages(prev => [...prev, errorMessage]);
       }
       
     } catch (error) {
-      // תפיסת שגיאות קריטיות (קריסת רשת או שרת)
       console.error("❌ Client Error:", error);
-      setResponse("תקלת רשת או שגיאת שרת פנימית. לא ניתן להתחבר.");
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "תקלת רשת או שגיאת שרת פנימית. לא ניתן להתחבר."
+      };
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6 flex flex-col h-full min-h-[400px]">
+    <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6 flex flex-col max-h-[700px]">
       
       {/* כותרת יפה */}
       <div className="flex items-center gap-3 mb-6 border-b border-slate-800 pb-4">
@@ -65,33 +96,47 @@ const handleAsk = async (textToAsk: string) => {
         </div>
         <div>
           <h3 className="font-bold text-lg text-white">FinDash Analyst</h3>
-          <p className="text-xs text-slate-400">אנליסט AI מכוון פיננסי (מופעל ע"י Groq Llama 3.3-70b-versatile)</p>
+          <p className="text-xs text-slate-400">אנליסט AI  פיננסי </p>
         </div>
       </div>
 
-      {/* אזור התשובה */}
-      <div className="flex-1 overflow-y-auto mb-4 space-y-4 min-h-[200px]">
-        {loading ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400 animate-pulse">
-                <Loader2 className="animate-spin text-blue-500" size={32} />
-                <span className="text-sm">מעבד את הנתונים שלי...</span>
-            </div>
-        ) : response ? (
-            <div className="bg-slate-800/80 border border-slate-700 rounded-lg p-5 text-slate-200 leading-relaxed text-sm whitespace-pre-wrap shadow-inner">
-                {response}
-            </div>
-        ) : (
+      {/* אזור התשובה - עם גבול גובה קבוע וגלילה */}
+      <div className="flex-1 overflow-y-auto mb-4 space-y-3 max-h-[500px] border border-slate-700/30 rounded-lg p-4 bg-slate-950/40">
+        {messages.length === 0 && !loading ? (
             <div className="flex flex-col items-center justify-center h-full text-center opacity-60">
                 <Sparkles className="text-blue-400 mb-3" size={32} />
                 <p className="text-slate-400 text-sm max-w-xs">
                   שאל אותי כל שאלה על מניית {symbol}.
                 </p>
             </div>
+        ) : (
+            <>
+              {messages.map((msg) => (
+                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`rounded-lg p-3 max-w-[85%] text-sm leading-relaxed whitespace-pre-wrap ${
+                    msg.role === 'user' 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-slate-800 text-slate-200'
+                  }`}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="flex items-center gap-2 bg-slate-800 text-slate-200 p-3 rounded-lg">
+                    <Loader2 className="animate-spin" size={16} />
+                    <span className="text-sm">מחפש...</span>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </>
         )}
       </div>
 
-      {/* כפתורי הצעות מהירים */}
-      {!response && !loading && (
+      {/* כפתורי הצעות מהירים - הופיע רק בהתחלה */}
+      {messages.length === 0 && !loading && (
         <div className="flex flex-wrap gap-2 mb-4">
             {suggestions.map((s) => (
                 <button 

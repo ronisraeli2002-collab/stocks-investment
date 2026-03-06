@@ -1,15 +1,44 @@
-import YahooFinance from "yahoo-finance2";
 import { redis } from "./redis";
 
-const CACHE_TTL_REALTIME = 60;   
-const CACHE_TTL_HISTORY = 3600;  
-const yahooConfig = { suppressNotices: ['yahooSurvey'] };
+// data interfaces
+export interface StockQuote {
+  price: number;
+  change: number;
+  name: string;
+  symbol?: string;
+}
+
+export interface StockHistoryPoint {
+  date: string;
+  price: number;
+}
+
+export interface StockNewsItem {
+  uuid: string;
+  title: string;
+  publisher: string;
+  link: string;
+  providerPublishTime: number;
+}
+
+// Finnhub configuration
+const FINNHUB_BASE = "https://finnhub.io/api/v1";
+if (!process.env.FINNHUB_API_KEY) {
+  console.warn("⚠️ WARNING: FINNHUB_API_KEY not set in environment");
+}
+
+const CACHE_TTL_REALTIME = 45;   // מחירים: 45 שניות (שיווק עדכני אבל הוגן)
+const CACHE_TTL_HISTORY = 7200;  // גרף: 2 שעות (לא קורה כתמיד משתנה)
+
+// Deduplication: מנע בקשות מרובות בו-זמנית לאותה מניה
+const inflightRequests = new Map<string, Promise<StockQuote>>();
 
 // ==========================================
 // מתג שליטה: סביבת פיתוח (Mock) מול ייצור (Live)
-// שנה ל-false כדי לחזור למשוך נתונים אמיתיים מיאהו
+// רק אם הגדרת USE_MOCK_DATA=true ב-.env תשתמש במoק
+// אם אין FINNHUB_API_KEY, תשתמש גם במoק כברירת מחדל
 // ==========================================
-const USE_MOCK_DATA = true; 
+const USE_MOCK_DATA = process.env.USE_MOCK_DATA === "true" || !process.env.FINNHUB_API_KEY; 
 
 // --- נתוני דמה (Mock Data) לדילוג על יאהו ---
 const MOCK_PRICES: Record<string, { price: number, name: string }> = {
@@ -56,35 +85,69 @@ function getMockHistory(symbol: string) {
 // ==========================================
 
 // --- פונקציה: הבאת נתונים למניה בודדת ---
-export async function getStockData(symbol: string) {
-  if (USE_MOCK_DATA) return getMockQuote(symbol);
+export async function getStockData(symbol: string): Promise<StockQuote> {
+  if (USE_MOCK_DATA) {
+    console.log(`📈 Using MOCK data for ${symbol}`);
+    return getMockQuote(symbol);
+  }
 
   const cacheKey = `stock:${symbol.toUpperCase()}`;
+  
+  // בדיקת Deduplication: אם כבר יש בקשה בעבודה, חכה לה
+  if (inflightRequests.has(symbol)) {
+    console.log(`⏳ Waiting for in-flight request for ${symbol}...`);
+    return inflightRequests.get(symbol)!;
+  }
+
   try {
-    const cachedData = await redis.get(cacheKey);
-    if (cachedData) return cachedData;
-
-    const yahooFinance = new YahooFinance(yahooConfig);
-    const quote = await yahooFinance.quote(symbol);
-    
-    const data = {
-      price: quote.regularMarketPrice || 0,
-      change: quote.regularMarketChangePercent || 0,
-      name: quote.shortName || quote.longName || symbol,
-    };
-
-    if (data.price > 0) {
-      await redis.set(cacheKey, data, { ex: CACHE_TTL_REALTIME });
+    const cachedData = await redis.get(cacheKey) as StockQuote;
+    if (cachedData) {
+      console.log(`💾 Returning cached data for ${symbol}`);
+      return cachedData;
     }
-    return data;
+
+    console.log(`🔍 Fetching live data for ${symbol} from Finnhub...`);
+
+    // יצור Promise וחזקה ב-map
+    const fetchPromise = (async () => {
+      const resp = await fetch(
+        `${FINNHUB_BASE}/quote?symbol=${symbol.toUpperCase()}&token=${process.env.FINNHUB_API_KEY}`
+      );
+      const json = await resp.json();
+
+      if (!json.c) {
+        console.warn(`⚠️ No price data from Finnhub for ${symbol}:`, json);
+      }
+
+      const data = {
+        price: json.c || 0,
+        change: json.dp || 0,
+        name: symbol.toUpperCase(),
+      };
+
+      console.log(`✅ Got ${symbol}: $${data.price}, ${data.change > 0 ? '+' : ''}${data.change.toFixed(2)}%`);
+
+      if (data.price > 0) {
+        await redis.set(cacheKey, data, { ex: CACHE_TTL_REALTIME });
+      }
+      return data;
+    })();
+
+    inflightRequests.set(symbol, fetchPromise);
+    
+    const result = await fetchPromise;
+    inflightRequests.delete(symbol);
+    
+    return result;
   } catch (error) {
     console.error(`❌ Failed to fetch data for ${symbol}:`, error);
+    inflightRequests.delete(symbol);
     return { price: 0, change: 0, name: symbol };
   }
 }
 
 // --- פונקציה: הבאת נתונים לקבוצת מניות ---
-export async function getBatchStockData(symbols: string[]) {
+export async function getBatchStockData(symbols: string[]): Promise<StockQuote[]> {
   if (!symbols || symbols.length === 0) return [];
   
   if (USE_MOCK_DATA) {
@@ -94,17 +157,18 @@ export async function getBatchStockData(symbols: string[]) {
   const promises = symbols.map(async (symbol) => {
     const cacheKey = `stock:${symbol.toUpperCase()}`;
     try {
-      const cachedData = await redis.get(cacheKey);
-      if (cachedData) return { symbol, ...(cachedData as any) }; 
+      const cachedData = await redis.get(cacheKey) as StockQuote;
+      if (cachedData) return { symbol: symbol.toUpperCase(), ...cachedData };
 
-      const yahooFinance = new YahooFinance(yahooConfig);
-      const quote = await yahooFinance.quote(symbol);
-      
+      const resp = await fetch(
+        `${FINNHUB_BASE}/quote?symbol=${symbol.toUpperCase()}&token=${process.env.FINNHUB_API_KEY}`
+      );
+      const json = await resp.json();
       const data = {
-        symbol: quote.symbol,
-        price: quote.regularMarketPrice || 0,
-        change: quote.regularMarketChangePercent || 0,
-        name: quote.shortName || quote.longName || quote.symbol,
+        symbol: symbol.toUpperCase(),
+        price: json.c || 0,
+        change: json.dp || 0,
+        name: symbol.toUpperCase(),
       };
 
       if (data.price > 0) {
@@ -121,40 +185,147 @@ export async function getBatchStockData(symbols: string[]) {
   return results.filter((res) => res !== null);
 }
 
+// --- פונקציה: חדשות למניה ---
+export async function getStockNews(symbol: string): Promise<StockNewsItem[]> {
+  if (USE_MOCK_DATA) {
+    // fallback to static mock news
+    return [
+      {
+        uuid: "mock-1",
+        title: `דיווח מיוחד: אנליסטים מעלים את תחזית הצמיחה של ${symbol} לרבעון הקרוב`,
+        publisher: "FinDash News",
+        link: "#",
+        providerPublishTime: Math.floor(Date.now() / 1000) - 3600
+      },
+      {
+        uuid: "mock-2",
+        title: `המניה של ${symbol} מציגה תנודתיות על רקע הכרזות חדשות בשוק הטכנולוגיה`,
+        publisher: "FinDash Market Watch",
+        link: "#",
+        providerPublishTime: Math.floor(Date.now() / 1000) - 86400
+      },
+      {
+        uuid: "mock-3",
+        title: `האם זה הזמן הנכון להגדיל החזקות ב-${symbol}? ניתוח מעמיק`,
+        publisher: "FinDash Analyst",
+        link: "#",
+        providerPublishTime: Math.floor(Date.now() / 1000) - 172800
+      }
+    ];
+  }
+
+  // real news via Finnhub
+  try {
+    const toDate = new Date();
+    const fromDate = new Date();
+    fromDate.setDate(toDate.getDate() - 30);
+    
+    console.log(`📰 Fetching news for ${symbol} from ${fromDate.toISOString().slice(0,10)} to ${toDate.toISOString().slice(0,10)}`);
+    
+    const resp = await fetch(
+      `${FINNHUB_BASE}/company-news?symbol=${symbol.toUpperCase()}&from=${fromDate.toISOString().slice(0,10)}&to=${toDate.toISOString().slice(0,10)}&token=${process.env.FINNHUB_API_KEY}`
+    );
+    
+    if (!resp.ok) {
+      console.warn(`⚠️ Finnhub news returned ${resp.status} for ${symbol}, falling back to mock`);
+      // Fallback to mock if permission denied
+      return [
+        {
+          uuid: "mock-1",
+          title: `דיווח מיוחד: אנליסטים מעלים את תחזית הצמיחה של ${symbol} לרבעון הקרוב`,
+          publisher: "FinDash News",
+          link: "#",
+          providerPublishTime: Math.floor(Date.now() / 1000) - 3600
+        },
+        {
+          uuid: "mock-2",
+          title: `המניה של ${symbol} מציגה תנודתיות על רקע הכרזות חדשות בשוק הטכנולוגיה`,
+          publisher: "FinDash Market Watch",
+          link: "#",
+          providerPublishTime: Math.floor(Date.now() / 1000) - 86400
+        }
+      ];
+    }
+    
+    const json = await resp.json();
+    
+    if (!Array.isArray(json)) {
+      console.warn(`⚠️ News response for ${symbol} is not an array:`, json);
+      return [];
+    }
+    
+    console.log(`✅ Got ${json.length} news items for ${symbol}`);
+    
+    return json.map((item: any) => ({
+      uuid: item.id || item.url,
+      title: item.headline,
+      publisher: item.source,
+      link: item.url,
+      providerPublishTime: item.datetime
+    }));
+  } catch (err) {
+    console.error("❌ News fetch error", err);
+    return [];
+  }
+}
+
 // --- פונקציה: היסטוריה לגרף ---
-export async function getStockHistory(symbol: string) {
-  if (USE_MOCK_DATA) return getMockHistory(symbol);
+export async function getStockHistory(symbol: string): Promise<StockHistoryPoint[]> {
+  if (USE_MOCK_DATA) {
+    console.log(`📈 Using MOCK history for ${symbol}`);
+    return getMockHistory(symbol);
+  }
 
   const cacheKey = `history:${symbol.toUpperCase()}`;
   try {
-    const cachedData = await redis.get(cacheKey);
-    if (cachedData) return cachedData;
+    const cachedData = await redis.get(cacheKey) as StockHistoryPoint[];
+    if (cachedData && Array.isArray(cachedData) && cachedData.length > 0) {
+      console.log(`📊 Returning cached history for ${symbol}, points: ${cachedData.length}`);
+      return cachedData;
+    }
 
-    const yahooFinance = new YahooFinance(yahooConfig);
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setFullYear(startDate.getFullYear() - 1); 
+    const now = Math.floor(Date.now() / 1000);
+    const from = now - 60 * 60 * 24 * 365; // 1 year back
+    
+    console.log(`🔍 Fetching history for ${symbol} from Finnhub...`);
+    console.log(`   Timestamp range: ${from} (${new Date(from * 1000).toISOString()}) to ${now} (${new Date(now * 1000).toISOString()})`);
+    
+    const resp = await fetch(
+      `${FINNHUB_BASE}/stock/candle?symbol=${symbol.toUpperCase()}&resolution=D&from=${from}&to=${now}&token=${process.env.FINNHUB_API_KEY}`
+    );
+    
+    if (!resp.ok) {
+      console.error(`❌ Finnhub HTTP error ${resp.status} for ${symbol}`);
+      console.log(`📡 Raw response:`, await resp.text());
+      // Fallback to mock on error
+      return getMockHistory(symbol);
+    }
 
-    const result = await yahooFinance.chart(symbol, {
-      period1: startDate,
-      interval: "1d",
-    });
+    const json = await resp.json();
+    
+    console.log(`📡 Finnhub response for ${symbol}:`, JSON.stringify(json).substring(0, 200));
+    
+    if (json.s !== "ok" || !json.c || !json.t || json.c.length === 0) {
+      console.warn(`⚠️ No history data from Finnhub for ${symbol}, status: ${json.s}`);
+      console.log(`   Full response:`, JSON.stringify(json));
+      // Fallback to mock when no data
+      return getMockHistory(symbol);
+    }
 
-    if (!result || !result.quotes) return [];
+    const data = json.t.map((ts: number, i: number) => ({
+      date: new Date(ts * 1000).toISOString(),
+      price: json.c[i],
+    }));
 
-    const data = result.quotes
-      .filter((day: any) => day.date && day.close)
-      .map((day: any) => ({
-        date: new Date(day.date).toISOString(), 
-        price: day.close,
-      }));
-
+    console.log(`✅ Got ${data.length} data points for ${symbol}`);
+    
     if (data.length > 0) {
       await redis.set(cacheKey, data, { ex: CACHE_TTL_HISTORY });
     }
     return data;
   } catch (error) {
     console.error(`❌ Failed to fetch history for ${symbol}:`, error);
-    return [];
+    // Fallback to mock on exception
+    return getMockHistory(symbol);
   }
 }

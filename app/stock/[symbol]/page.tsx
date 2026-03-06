@@ -61,7 +61,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* עמודה ימנית רחבה: גרף וחדשות */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-8 max-h-screen overflow-y-auto pr-4">
             
             {/* גרף */}
             <div className="bg-slate-900/30 border border-slate-800/50 rounded-2xl p-1">

@@ -1,9 +1,8 @@
 "use server";
 
-import  YahooFinance  from "yahoo-finance2"; 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { getStockData, getStockHistory, getBatchStockData } from "@/lib/finance";
+import { getStockData, getStockHistory, getBatchStockData, getStockNews as fetchStockNews } from "@/lib/finance";
 import { analyzeStockWithPython } from "@/lib/ai";
 import { auth } from "@clerk/nextjs/server";
 
@@ -128,30 +127,7 @@ export async function getAiAnalysis(symbol: string) {
   return await analyzeStockWithPython(symbol);
 }
 
-// --- פונקציה 7: קבלת חדשות למניה (מנותק מיאהו בסביבת פיתוח) ---
+// --- פונקציה 7: קבלת חדשות למניה ---
 export async function getStockNews(symbol: string) {
-  // אנחנו מחזירים את נתוני הגיבוי באופן מיידי כדי לחסל את קריסות ה-fetch של Next.js
-  return [
-    {
-      uuid: "mock-1",
-      title: `דיווח מיוחד: אנליסטים מעלים את תחזית הצמיחה של ${symbol} לרבעון הקרוב`,
-      publisher: "FinDash News",
-      link: "#",
-      providerPublishTime: Math.floor(Date.now() / 1000) - 3600
-    },
-    {
-      uuid: "mock-2",
-      title: `המניה של ${symbol} מציגה תנודתיות על רקע הכרזות חדשות בשוק הטכנולוגיה`,
-      publisher: "FinDash Market Watch",
-      link: "#",
-      providerPublishTime: Math.floor(Date.now() / 1000) - 86400
-    },
-    {
-      uuid: "mock-3",
-      title: `האם זה הזמן הנכון להגדיל החזקות ב-${symbol}? ניתוח מעמיק`,
-      publisher: "FinDash Analyst",
-      link: "#",
-      providerPublishTime: Math.floor(Date.now() / 1000) - 172800
-    }
-  ];
+  return await fetchStockNews(symbol);
 }

@@ -42,12 +42,12 @@ export function StockCard({ id, symbol, name, quantity, price, change, onDelete 
     const result = await getAiAnalysis(symbol);
     setIsAnalyzing(false);
 
-    if (result && !result.error) {
+    if (result && result.symbol) {
       setAiAnalysis(result);
       setIsFlipped(true);
       toast.success(`הניתוח של ${symbol} מוכן!`);
     } else {
-      const errorMessage = result?.error || "שגיאה בהתחברות למוח";
+      const errorMessage = "שגיאה בהתחברות למוח - נסה שוב";
       toast.error(errorMessage);
     }
   };
@@ -152,20 +152,20 @@ export function StockCard({ id, symbol, name, quantity, price, change, onDelete 
                         <div className="space-y-1">
                             <h3 className="text-slate-400 text-xs uppercase tracking-widest">AI Prediction</h3>
                             <div className="text-3xl font-mono font-bold text-white flex justify-center items-center gap-2">
-                                ${aiAnalysis.prediction}
-                                {aiAnalysis.prediction > price ? 
+                                ${typeof aiAnalysis.prediction === 'number' ? aiAnalysis.prediction.toFixed(2) : price.toFixed(2)}
+                                {(aiAnalysis?.prediction || price) > price ? 
                                     <TrendingUp className="text-emerald-400" size={24}/> : 
                                     <TrendingDown className="text-red-400" size={24}/>
                                 }
                             </div>
                         </div>
 
-                        <div className={`p-3 rounded-xl border ${aiAnalysis.trend.includes("Bullish") ? "bg-emerald-950/30 border-emerald-500/30" : "bg-red-950/30 border-red-500/30"}`}>
-                            <div className={`font-bold text-lg ${aiAnalysis.trend.includes("Bullish") ? "text-emerald-400" : "text-red-400"}`}>
-                                {aiAnalysis.trend.includes("Bullish") ? "מגמה חיובית (BUY)" : "מגמה שלילית (SELL)"}
+                        <div className={`p-3 rounded-xl border ${(aiAnalysis?.trend || "").includes("Bullish") ? "bg-emerald-950/30 border-emerald-500/30" : "bg-red-950/30 border-red-500/30"}`}>
+                            <div className={`font-bold text-lg ${(aiAnalysis?.trend || "").includes("Bullish") ? "text-emerald-400" : "text-red-400"}`}>
+                                {(aiAnalysis?.trend || "").includes("Bullish") ? "מגמה חיובית (BUY)" : "מגמה שלילית (SELL)"}
                             </div>
                             <div className="text-xs text-slate-400 mt-1 font-mono">
-                                עוצמת שינוי צפויה: {aiAnalysis.signal_strength}
+                                עוצמת שינוי צפויה: {aiAnalysis?.signal_strength || 0}%
                             </div>
                         </div>
                     </div>
